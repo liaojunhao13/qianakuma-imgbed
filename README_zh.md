@@ -144,3 +144,108 @@ CloudFlare-ImgBed 是一个兼容 Docker 和 Serverless 双栈部署，支持多
 本项目基于 [MIT 协议](https://github.com/MarSeventh/CloudFlare-ImgBed/blob/main/LICENSE) 开源，您在符合协议的前提下可以自由使用、修改、分发本项目，但请保留原作者在**包括但不限于**前后端代码和其他文件在内的所有副本或重要部分中的**版权声明**。
 
 本项目基于 [Telegraph-Image](https://github.com/cf-pages/Telegraph-Image) 项目二次开发。
+
+---
+
+# qianakuma 私有图床部署
+
+本 fork 用于部署 `img.qianakuma.xyz`，采用 Cloudflare Workers + D1 + R2 的 Serverless 架构。图片文件存入 R2，索引、站点设置和认证数据存入 D1；Worker 同时提供前端页面、上传 API 和图片访问接口。
+
+## 已约定的资源
+
+| 资源 | 名称 / Binding | 用途 |
+| --- | --- | --- |
+| Worker | `qianakuma-imgbed` | 图床前端与 API |
+| D1 | `qianakuma-imgbed-db` / `img_d1` | 元数据、设置和认证信息 |
+| R2 | `qianakuma-imgbed-r2` / `img_r2` | 图片文件 |
+| Custom Domain | `img.qianakuma.xyz` | 图床独立域名 |
+
+`img.qianakuma.xyz` 是独立主机名，不会覆盖或修改 `blog.qianakuma.xyz`。
+
+## 环境准备
+
+```bash
+npm ci
+npx wrangler login
+```
+
+创建并初始化资源：
+
+```bash
+npx wrangler d1 create qianakuma-imgbed-db
+npx wrangler d1 execute qianakuma-imgbed-db --remote --file database/init.sql
+npx wrangler r2 bucket create qianakuma-imgbed-r2
+```
+
+把 D1 返回的 `database_id` 写入 `deploy/worker/wrangler.toml`。R2 和 D1 的 binding 必须分别保持为 `img_r2` 和 `img_d1`。
+
+## Cloudflare Secrets
+
+以下敏感配置必须通过 Cloudflare Worker Secrets 设置，不得写入 `wrangler.toml`、源码、README 或 GitHub 普通 Variables：
+
+```bash
+npx wrangler secret put BASIC_USER --config deploy/worker/wrangler.toml
+npx wrangler secret put BASIC_PASS --config deploy/worker/wrangler.toml
+npx wrangler secret put AUTH_CODE --config deploy/worker/wrangler.toml
+npx wrangler secret put RESET_KEY --config deploy/worker/wrangler.toml
+```
+
+| Secret | 必需 | 说明 |
+| --- | --- | --- |
+| `BASIC_USER` | 是 | 管理员用户名 |
+| `BASIC_PASS` | 是 | 管理员强密码 |
+| `AUTH_CODE` | 推荐 | 访客上传/访问认证码；私人图床应设置 |
+| `RESET_KEY` | 推荐 | 紧急重置认证配置；使用后应轮换 |
+
+R2 通过 Worker binding 访问，不需要把 R2 Access Key 或 Secret Access Key 放进应用。只有使用 S3 兼容接口的外部工具时才需要单独创建 R2 API Token，而且同样不得提交到 GitHub。
+
+## 部署 Worker
+
+```bash
+node deploy/worker/generate-routes.js
+npx wrangler deploy --config deploy/worker/wrangler.toml
+```
+
+配置使用精确 Custom Domain 路由：
+
+```toml
+routes = [
+  { pattern = "img.qianakuma.xyz", custom_domain = true }
+]
+```
+
+部署后检查 `https://img.qianakuma.xyz`。首次登录后应立即在管理界面复核安全和上传渠道设置。
+
+## GitHub Actions 自动部署
+
+仓库自带 `.github/workflows/deploy-worker.yml`。若启用自动部署，在 GitHub Actions Secrets 中设置：
+
+- `CLOUDFLARE_API_TOKEN`：仅授予该账号 Workers Scripts、D1 和 R2 所需权限
+- `CLOUDFLARE_ACCOUNT_ID`
+- `D1_DATABASE_ID`
+- `R2_BUCKET_NAME`
+- `WORKER_NAME`：`qianakuma-imgbed`
+
+管理员密码、上传码等运行时凭据应直接保存在 Cloudflare Worker Secrets 中，不要放入 `WORKER_VARS`。Worker Secrets 在后续部署时会保留。
+
+## DNS 与自定义域名
+
+`qianakuma.xyz` 需要位于同一个 Cloudflare 账号。首次部署带有 `custom_domain = true` 的 Worker 后，Cloudflare 会为 `img.qianakuma.xyz` 创建或关联 DNS 记录和证书。
+
+不要修改 `blog.qianakuma.xyz` 的 CNAME 或 Worker Route。图床仅使用 `img.qianakuma.xyz`。
+
+## Markdown 引用图片
+
+上传成功后复制返回的图片 URL：
+
+```md
+![WMMA fragment 示意图](https://img.qianakuma.xyz/file/目录/图片文件名.png)
+```
+
+在 Astro frontmatter 中作为封面：
+
+```yaml
+image: "https://img.qianakuma.xyz/file/目录/图片文件名.png"
+```
+
+建议使用只包含英文字母、数字、连字符和短路径的文件名，避免后续迁移时出现 URL 编码问题。

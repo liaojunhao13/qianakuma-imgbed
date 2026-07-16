@@ -10,11 +10,16 @@
 # GitHub Actions 部署时会自动从 Secrets/Variables 生成此文件，
 # 无需手动编辑。详见 .github/workflows/deploy-worker.yml
 
-name = "cloudflare-imgbed"
+name = "qianakuma-imgbed"
 main = "index.js"
 compatibility_date = "2024-08-21"
 # 让 Worker 对自身 zone 的 fetch() 走公网入口，不要直连 origin。
 compatibility_flags = ["global_fetch_strictly_public"]
+
+# 仅绑定图床子域名，不影响 blog.qianakuma.xyz。
+routes = [
+  { pattern = "img.qianakuma.xyz", custom_domain = true }
+]
 
 # 静态资源（前端文件）
 [assets]
@@ -23,17 +28,16 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 [vars]
-# TG_BOT_TOKEN = ""
-# TG_CHAT_ID = ""
+R2PublicUrl = "https://img.qianakuma.xyz/file"
 
-# [[d1_databases]]
-# binding = "img_d1"
-# database_name = "img_d1"
-# database_id = ""
+[[d1_databases]]
+binding = "img_d1"
+database_name = "qianakuma-imgbed-db"
+database_id = "8e7d1e0f-2b84-43bb-986d-55b2e0d5cfcd"
 
-# [[r2_buckets]]
-# binding = "img_r2"
-# bucket_name = ""
+[[r2_buckets]]
+binding = "img_r2"
+bucket_name = "qianakuma-imgbed-r2"
 
 # [[kv_namespaces]]
 # binding = "img_url"
