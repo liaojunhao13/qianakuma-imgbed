@@ -29,6 +29,7 @@ not_found_handling = "single-page-application"
 
 [vars]
 R2PublicUrl = "https://img.qianakuma.xyz/file"
+USER_CONFIG = '{"siteTitle":"恶魔茜图床","ownerName":"QianAkuma ImgBed","logoLink":"https://github.com/liaojunhao13/qianakuma-imgbed","disableFooter":true,"defaultUploadChannel":"cfr2","defaultChannelName":"R2_env","urlPrefix":"https://img.qianakuma.xyz/file/"}'
 
 [[d1_databases]]
 binding = "img_d1"
